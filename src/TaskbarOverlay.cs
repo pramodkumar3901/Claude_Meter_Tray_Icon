@@ -45,6 +45,12 @@ internal sealed class TaskbarOverlay : Form
         _placeTimer.Start();
     }
 
+    /// <summary>
+    /// False when the readout can't be placed (vertical taskbar, or no taskbar found), so the
+    /// caller can fall back to the tray icon and the app never becomes unreachable.
+    /// </summary>
+    public bool Supported { get; private set; } = true;
+
     /// <summary>Turns the overlay on or off (the tray icon is unaffected).</summary>
     [System.ComponentModel.Browsable(false)]
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -138,6 +144,7 @@ internal sealed class TaskbarOverlay : Form
         IntPtr tray = FindWindow("Shell_TrayWnd", null);
         if (tray == IntPtr.Zero || !GetWindowRect(tray, out RECT tr))
         {
+            Supported = false;
             if (Visible) Hide();
             return;
         }
@@ -146,9 +153,12 @@ internal sealed class TaskbarOverlay : Form
         int trayWidth = tr.Right - tr.Left;
         if (trayHeight <= 0 || trayHeight > trayWidth) // vertical taskbar: not supported
         {
+            Supported = false;
             if (Visible) Hide();
             return;
         }
+
+        Supported = true;
 
         _light = IsLightTaskbar();
 

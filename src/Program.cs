@@ -78,6 +78,7 @@ internal sealed class TrayAppContext : ApplicationContext
     private readonly ToolStripMenuItem _sevenItem;
     private readonly ToolStripMenuItem _statusItem;
     private readonly TaskbarOverlay _overlay = new();
+    private readonly AppSettings _settings = AppSettings.Load();
     private readonly System.Windows.Forms.Timer _timer;
     private readonly UsageService _service = new();
     private readonly CancellationTokenSource _cts = new();
@@ -108,6 +109,7 @@ internal sealed class TrayAppContext : ApplicationContext
             new ToolStripSeparator(),
             new ToolStripMenuItem("Refresh now", null, (_, _) => _ = RefreshAsync(manual: true)),
             CreateOverlayToggle(),
+            CreateTrayIconToggle(),
             CreateStartupToggle(),
             new ToolStripMenuItem("Quit", null, (_, _) => ExitThread()),
         });
@@ -120,19 +122,21 @@ internal sealed class TrayAppContext : ApplicationContext
             if (e.Button == MouseButtons.Left) _ = RefreshAsync(manual: true);
             else if (e.Button == MouseButtons.Right) _menu.Show(Cursor.Position);
         };
+        _overlay.OverlayEnabled = _settings.ShowOverlay;
         _overlay.SetUsage(null, Freshness.Expired, null, Freshness.Expired);
 
         _tray = new NotifyIcon
         {
-            Visible = true,
+            Visible = false, // UpdateTrayVisibility decides, below
             ContextMenuStrip = _menu,
             Text = "Claude usage",
             Icon = SwapIcon(IconRenderer.CreateIcon(null, Freshness.Expired, null, Freshness.Expired)),
         };
 
         // Readings age even when nothing new arrives, so re-judge freshness regularly.
-        _viewTimer.Tick += (_, _) => UpdateView();
+        _viewTimer.Tick += (_, _) => { UpdateTrayVisibility(); UpdateView(); };
         _viewTimer.Start();
+        UpdateTrayVisibility();
         _tray.MouseClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
@@ -187,9 +191,37 @@ internal sealed class TrayAppContext : ApplicationContext
 
     private ToolStripMenuItem CreateOverlayToggle()
     {
-        var item = new ToolStripMenuItem("Show text on taskbar") { Checked = true, CheckOnClick = true };
-        item.CheckedChanged += (_, _) => _overlay.OverlayEnabled = item.Checked;
+        var item = new ToolStripMenuItem("Show text on taskbar") { Checked = _settings.ShowOverlay, CheckOnClick = true };
+        item.CheckedChanged += (_, _) =>
+        {
+            _settings.ShowOverlay = item.Checked;
+            _settings.Save();
+            _overlay.OverlayEnabled = item.Checked;
+            UpdateTrayVisibility();
+        };
         return item;
+    }
+
+    private ToolStripMenuItem CreateTrayIconToggle()
+    {
+        var item = new ToolStripMenuItem("Show tray icon") { Checked = _settings.ShowTrayIcon, CheckOnClick = true };
+        item.CheckedChanged += (_, _) =>
+        {
+            _settings.ShowTrayIcon = item.Checked;
+            _settings.Save();
+            UpdateTrayVisibility();
+        };
+        return item;
+    }
+
+    /// <summary>
+    /// The tray icon is hidden by default because the taskbar text carries the same numbers.
+    /// It is forced on whenever the text isn't available (turned off, or an unsupported taskbar),
+    /// so there is always something to right-click to reach the menu and quit.
+    /// </summary>
+    private void UpdateTrayVisibility()
+    {
+        _tray.Visible = _settings.ShowTrayIcon || !_settings.ShowOverlay || !_overlay.Supported;
     }
 
     private async Task RefreshAsync(bool manual = false)

@@ -2,9 +2,9 @@
 
 A small Windows tray app that shows your **Claude Code usage limits** live on the taskbar: the 5-hour and the 7-day window, with the percentage used and the time left until each one resets.
 
-![Tray icon states](docs/icon-states.png)
+![Taskbar readout](docs/taskbar-readout.png)
 
-*Tray icon at 16, 24 and 32 px (columns: low, medium, amber, red, outdated, no data). Top half is the 5-hour window, bottom half is the 7-day window.*
+*The readout on the taskbar, just left of the system tray. Top line: 5-hour window. Bottom line: 7-day window.*
 
 > **Unofficial.** This is a community project. It is not made, endorsed or supported by Anthropic. "Claude" is a trademark of Anthropic. It uses an undocumented API that may change or stop working at any time (see [Caveats](#caveats)).
 
@@ -18,10 +18,18 @@ A small Windows tray app that shows your **Claude Code usage limits** live on th
   ```
 
   The percentage is green below 70%, amber at 70–89% and red from 90%. The countdown ticks live without calling the API.
-- **Tray icon** with the same two numbers on a 16×16 pixel grid, for when the readout is hidden.
+- **Optional tray icon**, off by default, with the same two numbers on a 16×16 pixel grid (see [below](#optional-tray-icon)).
 - **Honest numbers.** If a reading may be out of date it is greyed out and marked with `?`, and shown as `--` once it is too old to trust (see [below](#stale-numbers-are-never-shown-as-live)).
-- Right-click menu with details, **Refresh now**, **Show text on taskbar** and **Start with Windows**.
+- Right-click the readout for a menu with details, **Refresh now**, **Show text on taskbar**, **Show tray icon** and **Start with Windows**. Left-click it to refresh. Your menu choices are remembered.
 - Quiet by design: gentle polling, rate-limit back-off, no window, no focus stealing, hides during full-screen apps.
+
+### Optional tray icon
+
+Turn on **Show tray icon** in the menu to also get a small icon in the system tray. It is hidden by default because the readout already carries the same numbers. It switches itself on when the readout can't be shown (you turned the text off, or the taskbar is vertical), so there is always something to right-click to reach the menu and quit.
+
+![Tray icon states](docs/icon-states.png)
+
+*The tray icon at 16, 24 and 32 px (columns: low, medium, amber, red, outdated, no data). Top half is the 5-hour window, bottom half is the 7-day window.*
 
 ## Requirements
 
@@ -63,7 +71,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -o publish
 
 - The token is sent **only** to `api.anthropic.com`. It is never logged, saved, or shown.
 - The app **never refreshes the token and never writes** the credentials file. Refresh tokens rotate, so writing could log Claude Code out. Claude Code renews the access token when you use it; if the app says the login expired, use Claude Code once and it recovers on its own.
-- The only thing the app writes is `%LOCALAPPDATA%\ClaudeMeterTrayIcon\state.json` (last reading and any rate-limit wait) and, for Start with Windows, the registry entries above. No usage data leaves your machine except the request to Anthropic.
+- The only things the app writes are `%LOCALAPPDATA%\ClaudeMeterTrayIcon\state.json` (last reading and any rate-limit wait), `settings.json` in the same folder (your menu choices) and, for Start with Windows, the registry entries above. No usage data leaves your machine except the request to Anthropic.
 - Claude Code does **not** need to be open while the app runs.
 
 ## Stale numbers are never shown as live
@@ -85,8 +93,8 @@ The usage API rate-limits (HTTP 429) if called too often. The app asks every 3 m
 - The usage endpoint is **undocumented** and may change without notice. If it does, the app shows an error and the parser in [`src/UsageService.cs`](src/UsageService.cs) needs updating.
 - The app assumes `utilization` is a percentage from 0 to 100.
 - Only accounts that sign in to Claude Code with a Claude subscription (OAuth) are supported, not API keys.
-- At 100% display scaling the tray icon is only 16 px, so its digits are small. Higher scaling gives a bigger icon, and the readout next to the tray is easier to read.
-- Vertical taskbars are not supported for the readout (the tray icon still works).
+- At 100% display scaling the tray icon is only 16 px, so its digits are small. That is why the readout is the default.
+- Vertical taskbars are not supported for the readout. The tray icon is used instead.
 
 ## Project layout
 
@@ -100,6 +108,7 @@ src/Freshness.cs             decides when a reading is fresh, outdated or unusab
 src/IconRenderer.cs          draws the 16x16 pixel-font tray icon
 src/TaskbarOverlay.cs        the text readout next to the tray
 src/Startup.cs               "Start with Windows"
+src/AppSettings.cs           remembers the menu toggles
 ```
 
 Render the icon states to a PNG without starting the tray:
